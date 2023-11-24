@@ -24,18 +24,18 @@ app.get('/employees', async (_req, res) => {
 
 
 //GET ATTENDANCE DATA
-app.get('/attendance', async (_req, res) => {
+app.get('/attendance', async (req, res) => {
     try {
+        const { startDate, endDate } = req.query;
         const attendance = await knex('attendance')
-        .join('employees', 'attendance.employee_id', '=', 'employees.id')
-        .select('attendance.*', 'employees.first_name', 'employees.last_name', 'employees.hourly_rate');
+            .join('employees', 'attendance.employee_id', '=', 'employees.id')
+            .select('attendance.*', 'employees.first_name', 'employees.last_name', 'employees.hourly_rate')
+            .whereBetween('attendance.date', [startDate, endDate]); // Filter by date range
         console.log(attendance);
         res.status(200).json(attendance);
-
     } catch (error) {
         console.error('Error retrieving attendance', error)
         res.status(500).send('Error retrieving attendance');
-        // response.send(`Error retrieving inventories:`);
     }
 });
 
@@ -48,7 +48,16 @@ app.post('/attendance/clockin', async (req, res) => {
         if (!employee_id || !clock_in_time) {
             return res.status(400).send('Missing required fields');
         }
-        // Insert a clock-in record into the attendance table
+        const existingEntry = await knex('attendance')
+            .where({
+                employee_id: employee_id,
+                clock_out_time: null
+            })
+            .first();
+
+        if (existingEntry) {
+            return res.status(400).send('Employee is already clocked in and has not clocked out.');
+        }
         // const sqlDateTime = new Date(clock_in_time).toISOString().replace('T', ' ').substring(0, 19);
         const estDateTime = moment(clock_in_time).tz('America/New_York').format('YYYY-MM-DD HH:mm:ss');
         // Insert a clock-in record into the attendance table
@@ -64,27 +73,37 @@ app.post('/attendance/clockin', async (req, res) => {
     }
 });
 
-//POSTING CLOCKED OUT DATA
-app.post('/attendance/clockout', async (req, res) => {
+// UPDATING CLOCKED OUT DATA
+app.put('/attendance/clockout', async (req, res) => {
     try {
         const { employee_id, clock_out_time } = req.body;
-        // Validate the data
         if (!employee_id || !clock_out_time) {
             return res.status(400).send('Missing required fields');
         }
-        // Insert a clock-in record into the attendance table
-        // const sqlDateTime = new Date(clock_out_time).toISOString().replace('T', ' ').substring(0, 19);
+
         const estDateTime = moment(clock_out_time).tz('America/New_York').format('YYYY-MM-DD HH:mm:ss');
 
-        // Insert a clock-in record into the attendance table
-        await knex('attendance').insert({
-            employee_id: employee_id,
-            clock_out_time: estDateTime,
-            date: estDateTime.split(' ')[0] // Extracting the date part
-        });
-        res.status(201).send('Clock-out recorded successfully');
+        const latestClockIn = await knex('attendance')
+            .where({
+                employee_id: employee_id,
+                clock_out_time: null
+            })
+            .orderBy('clock_in_time', 'desc')
+            .first();
+
+        if (!latestClockIn) {
+            return res.status(404).send('No clock-in record found to clock out.');
+        }
+
+        await knex('attendance')
+            .where({ id: latestClockIn.id })
+            .update({
+                clock_out_time: estDateTime
+            });
+
+        res.status(200).send('Clock-out updated successfully');
     } catch (error) {
-        console.error('Error recording clock-in', error);
+        console.error('Error updating clock-out', error);
         res.status(500).send('Internal Server Error');
     }
 });

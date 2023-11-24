@@ -13,7 +13,6 @@ exports.up = function (knex) {
             table.integer('employee_id').unsigned().references('id').inTable('employees');
             table.timestamp('clock_in_time');
             table.timestamp('clock_out_time');
-            table.date('date').notNullable();
         });
 };
 
