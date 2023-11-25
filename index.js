@@ -11,14 +11,21 @@ app.use(express.json());
 
 app.get('/employees', async (_req, res) => {
     try {
-        const employees = await knex('employees')
+        const employees = await knex('employees').select('*');
+        for (let employee of employees) {
+            const clockedIn = await knex('attendance')
+                .where({
+                    employee_id: employee.id,
+                    clock_out_time: null
+                })
+                .first();
+            employee.isClockedIn = !!clockedIn;
+        }
         console.log(employees);
         res.status(200).json(employees);
-
     } catch (error) {
-        console.error('Error retrieving employees', error)
+        console.error('Error retrieving employees', error);
         res.status(500).send('Error retrieving employees');
-        // response.send(`Error retrieving inventories:`);
     }
 });
 
@@ -30,11 +37,11 @@ app.get('/attendance', async (req, res) => {
         const attendance = await knex('attendance')
             .join('employees', 'attendance.employee_id', '=', 'employees.id')
             .select('attendance.*', 'employees.first_name', 'employees.last_name', 'employees.hourly_rate')
-            .whereBetween('attendance.date', [startDate, endDate]); // Filter by date range
+            .whereBetween(knex.raw('DATE(attendance.clock_in_time)'), [startDate, endDate]); // Filter by clock_in_time date range
         console.log(attendance);
         res.status(200).json(attendance);
     } catch (error) {
-        console.error('Error retrieving attendance', error)
+        console.error('Error retrieving attendance', error);
         res.status(500).send('Error retrieving attendance');
     }
 });
@@ -44,10 +51,13 @@ app.get('/attendance', async (req, res) => {
 app.post('/attendance/clockin', async (req, res) => {
     try {
         const { employee_id, clock_in_time } = req.body;
+        console.log("Received Request Data:", { employee_id, clock_in_time });
         // Validate the data
         if (!employee_id || !clock_in_time) {
             return res.status(400).send('Missing required fields');
         }
+
+        // Check if the employee is already clocked in
         const existingEntry = await knex('attendance')
             .where({
                 employee_id: employee_id,
@@ -58,18 +68,20 @@ app.post('/attendance/clockin', async (req, res) => {
         if (existingEntry) {
             return res.status(400).send('Employee is already clocked in and has not clocked out.');
         }
-        // const sqlDateTime = new Date(clock_in_time).toISOString().replace('T', ' ').substring(0, 19);
+
+        // Convert the received timestamp to the appropriate format
         const estDateTime = moment(clock_in_time).tz('America/New_York').format('YYYY-MM-DD HH:mm:ss');
-        // Insert a clock-in record into the attendance table
+
+        // Insert the clock-in record into the database
         await knex('attendance').insert({
             employee_id: employee_id,
             clock_in_time: estDateTime,
-            date: estDateTime.split(' ')[0] // Extracting the date part
         });
+
         res.status(201).send('Clock-in recorded successfully');
     } catch (error) {
         console.error('Error recording clock-in', error);
-        res.status(500).send('Internal Server Error');
+        res.status(500).send(`Internal Server Error: ${error.message}`);
     }
 });
 
