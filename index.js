@@ -9,6 +9,7 @@ require("dotenv").config();
 app.use(cors());
 app.use(express.json());
 
+// GET EMPLOYEE
 app.get('/employees', async (_req, res) => {
     try {
         const employees = await knex('employees').select('*');
@@ -29,17 +30,79 @@ app.get('/employees', async (_req, res) => {
     }
 });
 
+// DELETE EMPLOYEE
+app.delete('/employees/:id', async (req, res) => {
+    try {
+        const employeeId = req.params.id;
+        await knex('employees').where({ id: employeeId }).del();
+        res.status(200).send('Employee deleted successfully');
+    } catch (error) {
+        console.error('Error deleting employee', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+// UPDATING EMPLOYEE DATA
+app.put('/employees/:id', async (req, res) => {
+    const employeeId = req.params.id;
+    const updatedData = req.body;
+
+    try {
+        const updateCount = await knex('employees')
+            .where({ id: employeeId })
+            .update(updatedData);
+
+        if (updateCount > 0) {
+            res.status(200).send('Employee updated successfully');
+        } else {
+            res.status(404).send('Employee not found');
+        }
+    } catch (error) {
+        console.error('Error updating employee', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+// POST NEW EMPLOYEE
+app.post('/employees', async (req, res) => {
+    try {
+        const { first_name, last_name, hourly_rate } = req.body;
+        await knex('employees').insert({
+            first_name,
+            last_name,
+            hourly_rate
+        });
+        res.status(201).send('New employee added successfully');
+    } catch (error) {
+        console.error('Error adding new employee', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
 
 //GET ATTENDANCE DATA
 app.get('/attendance', async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
+
+        // First, get all employees
+        const employees = await knex('employees').select('*');
+
+        // Then, get attendance data within the specified date range
         const attendance = await knex('attendance')
             .join('employees', 'attendance.employee_id', '=', 'employees.id')
             .select('attendance.*', 'employees.first_name', 'employees.last_name', 'employees.hourly_rate')
-            .whereBetween(knex.raw('DATE(attendance.clock_in_time)'), [startDate, endDate]); // Filter by clock_in_time date range
-        console.log(attendance);
-        res.status(200).json(attendance);
+            .whereBetween(knex.raw('DATE(attendance.clock_in_time)'), [startDate, endDate]);
+
+        // Merge the attendance data with the employee data
+        const mergedData = employees.map(emp => {
+            const attendanceRecords = attendance.filter(a => a.employee_id === emp.id);
+            return {
+                ...emp,
+                attendance: attendanceRecords
+            };
+        });
+
+        res.status(200).json(mergedData);
     } catch (error) {
         console.error('Error retrieving attendance', error);
         res.status(500).send('Error retrieving attendance');
