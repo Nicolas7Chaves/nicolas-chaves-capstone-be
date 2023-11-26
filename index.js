@@ -9,6 +9,7 @@ require("dotenv").config();
 app.use(cors());
 app.use(express.json());
 
+// GET EMPLOYEE
 app.get('/employees', async (_req, res) => {
     try {
         const employees = await knex('employees').select('*');
@@ -26,6 +27,38 @@ app.get('/employees', async (_req, res) => {
     } catch (error) {
         console.error('Error retrieving employees', error);
         res.status(500).send('Error retrieving employees');
+    }
+});
+
+// DELETE EMPLOYEE
+app.delete('/employees/:id', async (req, res) => {
+    try {
+        const employeeId = req.params.id;
+        await knex('employees').where({ id: employeeId }).del();
+        res.status(200).send('Employee deleted successfully');
+    } catch (error) {
+        console.error('Error deleting employee', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+// UPDATING EMPLOYEE DATA
+app.put('/employees/:id', async (req, res) => {
+    const employeeId = req.params.id;
+    const updatedData = req.body;
+
+    try {
+        const updateCount = await knex('employees')
+            .where({ id: employeeId })
+            .update(updatedData);
+
+        if (updateCount > 0) {
+            res.status(200).send('Employee updated successfully');
+        } else {
+            res.status(404).send('Employee not found');
+        }
+    } catch (error) {
+        console.error('Error updating employee', error);
+        res.status(500).send('Internal Server Error');
     }
 });
 
