@@ -84,16 +84,13 @@ app.get('/attendance', async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
 
-        // First, get all employees
         const employees = await knex('employees').select('*');
 
-        // Then, get attendance data within the specified date range
         const attendance = await knex('attendance')
             .join('employees', 'attendance.employee_id', '=', 'employees.id')
             .select('attendance.*', 'employees.first_name', 'employees.last_name', 'employees.hourly_rate')
             .whereBetween(knex.raw('DATE(attendance.clock_in_time)'), [startDate, endDate]);
 
-        // Merge the attendance data with the employee data
         const mergedData = employees.map(emp => {
             const attendanceRecords = attendance.filter(a => a.employee_id === emp.id);
             return {
@@ -115,12 +112,12 @@ app.post('/attendance/clockin', async (req, res) => {
     try {
         const { employee_id, clock_in_time } = req.body;
         console.log("Received Request Data:", { employee_id, clock_in_time });
-        // Validate the data
+        
         if (!employee_id || !clock_in_time) {
             return res.status(400).send('Missing required fields');
         }
 
-        // Check if the employee is already clocked in
+
         const existingEntry = await knex('attendance')
             .where({
                 employee_id: employee_id,
@@ -135,7 +132,6 @@ app.post('/attendance/clockin', async (req, res) => {
         // Convert the received timestamp to the appropriate format
         const estDateTime = moment(clock_in_time).tz('America/New_York').format('YYYY-MM-DD HH:mm:ss');
 
-        // Insert the clock-in record into the database
         await knex('attendance').insert({
             employee_id: employee_id,
             clock_in_time: estDateTime,

@@ -3,11 +3,8 @@
  * @returns { Promise<void> }
  */
 exports.seed = async function (knex) {
-    // Deletes ALL existing entries in the attendance table first
     await knex('attendance').del();
-
-    // Then delete all existing entries in the employees table
-    await knex('employees').del();    // Current date and time
+    await knex('employees').del();
     const currentTimestamp = new Date();
     const createdDate = new Date('2023-11-20T00:00:00');
     await knex('employees').insert([
